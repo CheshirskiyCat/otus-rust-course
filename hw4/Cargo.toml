@@ -3,4 +3,8 @@ name = "otus-rust-course"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "library"
+path = "src/lib/lib.rs"
+
 [dependencies]
