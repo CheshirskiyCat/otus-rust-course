@@ -11,44 +11,74 @@
 // [ e _ _ ] read(2) -> return "bc"
 // Ваша задача написать такой буффер и добавить тесты
 
+use std::{error::Error, fmt};
+
 pub struct RingBuffer {
     read_idx: usize,
     write_idx: usize,
     data: Vec<u8>,
 }
 
+#[derive(Debug)]
+pub struct NoSpaceLeft;
+
+impl Error for NoSpaceLeft {}
+
+impl fmt::Display for NoSpaceLeft {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Nothing written to the buffer")
+    }
+}
+
 pub fn create(size: usize) -> RingBuffer {
-    RingBuffer{
+    RingBuffer {
         read_idx: 0,
         write_idx: 0,
-        data: vec![0; size]
+        data: vec![0; size],
     }
 }
 
-pub fn write(rb: &mut RingBuffer, items:Vec<char>) -> usize {
+pub fn write(rb: &mut RingBuffer, items: Vec<char>) -> Result<usize, NoSpaceLeft> {
     let mut counter: usize = 0;
-    for i in 0..items.len() {
-        if rb.data[rb.write_idx] != 0 { break; }
-        rb.data[rb.write_idx] = items[i].try_into().expect("wrong char");
+    for i in items {
+        if rb.data[rb.write_idx] != 0 {
+            break;
+        }
+        rb.data[rb.write_idx] = i.try_into().expect("wrong char");
         counter += 1;
         rb.write_idx += 1;
-        if rb.write_idx == rb.data.len() { rb.write_idx = 0 }
-        if rb.read_idx == rb.write_idx { break; }
+        if rb.write_idx == rb.data.len() {
+            rb.write_idx = 0
+        }
+        if rb.read_idx == rb.write_idx {
+            break;
+        }
     }
-    counter
+    if counter > 0 {
+        Ok(counter)
+    } else {
+        Err(NoSpaceLeft)
+    }
 }
 
-
-pub fn read(rb: &mut RingBuffer, items:usize) -> Vec<char> {
-    let mut result:Vec<char> = Vec::new();
+pub fn read(rb: &mut RingBuffer, items: usize) -> Option<Vec<char>> {
+    let mut result: Vec<char> = Vec::new();
     for _ in 0..items {
+        if rb.data[rb.read_idx] == 0 {
+            break;
+        }
         result.push(rb.data[rb.read_idx].into());
         rb.data[rb.read_idx] = 0;
         rb.read_idx += 1;
-        if rb.read_idx == rb.data.len() { rb.read_idx = 0 }
-        if rb.data[rb.read_idx] == 0 { break; }
+        if rb.read_idx == rb.data.len() {
+            rb.read_idx = 0
+        }
     }
-    result
+    if result.is_empty() {
+        None
+    } else {
+        Some(result)
+    }
 }
 
 #[cfg(test)]
@@ -64,17 +94,22 @@ mod tests {
     #[test]
     fn test_write_buffer() {
         let mut buffer = create(3);
-        let num = write(&mut buffer, vec!('a', 'b', 'c', 'd'));
-        assert_eq!(num, 3);
+        let num = write(&mut buffer, vec!['a', 'b', 'c', 'd']);
+        assert_eq!(num.unwrap(), 3);
         assert_eq!(buffer.data, vec!(97, 98, 99));
+        let num = write(&mut buffer, vec!['d']);
+        assert!(num.is_err());
     }
 
     #[test]
     fn test_read_buffer() {
         let mut buffer = create(3);
-        write(&mut buffer, vec!('a', 'b'));
-        let result = read(&mut buffer, 1);
+        write(&mut buffer, vec!['a', 'b']).unwrap();
+        let result = read(&mut buffer, 1).unwrap();
         assert_eq!(result, vec!['a']);
         assert_eq!(buffer.data, vec!(0, 98, 0));
+        read(&mut buffer, 1);
+        let result = read(&mut buffer, 1);
+        assert_eq!(result, None);
     }
 }
